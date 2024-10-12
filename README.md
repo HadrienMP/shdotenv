@@ -2,11 +2,9 @@
 
 dotenv for shells with support for POSIX-compliant and multiple .env file syntax
 
-![GitHub Workflow Status](https://img.shields.io/github/workflow/status/ko1nksm/shdotenv/macOS?logo=github)
+![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/ko1nksm/shdotenv/ubuntu.yml?branch=main&logo=github)
 
 **Project Status**: Almost complete. Major features have been implemented and v1.0.0 will be released in the near future.
-
-**Important Notes**: Incompatible changes were made in Version 0.12.0. If a definition with the same name exists in the `.env` file when `--overload` is specified, the later definition takes precedence. Also, it has been changed to default to an error for undesirable usage. We believe this change will not affect many cases, but if you have a problem, please open an issue.
 
 Quoting [bkeepers/dotenv][dotenv]:
 
@@ -39,9 +37,20 @@ shdotenv safely loads the syntax of .env files that are compatible with POSIX sh
 Download `shdotenv` (shell script) from [releases](https://github.com/ko1nksm/shdotenv/releases).
 
 ```console
-$ wget https://github.com/ko1nksm/shdotenv/releases/latest/download/shdotenv -O $HOME/bin/shdotenv
-$ chmod +x $HOME/bin/shdotenv
+$ mkdir -p "$HOME/bin"
+$ wget https://github.com/ko1nksm/shdotenv/releases/latest/download/shdotenv -O "$HOME/bin/shdotenv"
+$ chmod +x "$HOME/bin/shdotenv"
 ```
+
+If you prefer the XDG Base Directory Specification, you can install it under the `$HOME/.local/bin` directory.
+
+```console
+$ mkdir -p "$HOME/.local/bin"
+$ wget https://github.com/ko1nksm/shdotenv/releases/latest/download/shdotenv -O "$HOME/.local/bin/shdotenv"
+$ chmod +x "$HOME/.local/bin/shdotenv"
+```
+
+Do not forget to add the installed directory to the `PATH` environment variable.
 
 ### Build your own
 
@@ -50,18 +59,18 @@ $ chmod +x $HOME/bin/shdotenv
 ```console
 $ git clone https://github.com/ko1nksm/shdotenv.git
 $ cd shdotenv
-$ make build
+$ make
 $ make install PREFIX=$HOME
 ```
 
-**Full build**
+**Full build (test and generate a small build)**
 
 A full build requires requires [shfmt](https://github.com/mvdan/sh), [shellcheck](https://github.com/koalaman/shellcheck) and [shellspec](https://github.com/shellspec/shellspec).
 
 ```console
 $ git clone https://github.com/ko1nksm/shdotenv.git
 $ cd shdotenv
-$ make MINIFY=true
+$ make all MINIFY=true
 $ make install PREFIX=$HOME
 ```
 
@@ -81,26 +90,28 @@ Options:
                                 posix, ruby, node, python,
                                 php, go, rust, docker
   -f, --format FORMAT       Output in the specified format [default: sh]
-                                sh, csh, fish, json, jsonl, yaml, name
+                                sh, csh, fish, json, jsonl, yaml
   -e, --env ENV_PATH        Location of the .env file [default: .env]
                               Multiple -e options are allowed
                               If the ENV_PATH is "-", read from stdin
   -i, --ignore-environment  Ignore the current environment variables
       --overload            Overload predefined variables
       --no-allexport        Disable all variable export
-                              Same as deprecated --noexport
       --no-nounset          Allow references to undefined variables
       --grep PATTERN        Output only names that match the regexp pattern
   -s, --sort                Sort variable names
   -q, --quiet               Suppress all output (useful for test .env files)
-  -v, --version             Show the version and exit
-  -h, --help                Show this message and exit
+      --version             Show the version and exit
+      --help                Show this message and exit
 
-Usage: shdotenv export [-n | -p] [--] [NAME]...
-  Exports environment variables in posix-compliant .env format.
+Usage: shdotenv [OPTION]... export [-0ps] [-n | -v] [--] [NAME]...
+  Exports environment variables. Default output is POSIX-compliant .env format.
 
-  -n  List only environment variable names
+  -0  end each output line with NUL, not newline
   -p  Append "export" prefix to environment variable names
+  -s  Empty string instead of error if name is missing
+  -n  List environment variable names only
+  -v  List environment variable values only
 
   This will be output after the .env files is loaded. If you do not want
   to load it, specify "-e /dev/null". This is similar to "export", "env"
@@ -159,23 +170,19 @@ eval (shdotenv -f fish [OPTION]...)
 This is similar to `export`, `env` and `printenv` commands, but quoting correctly and exports only portable environment variable name that are valid as identifier for POSIX shell.
 
 ```text
-shdotenv export [-n | -p] [NAME]...
+shdotenv [OPTION]... export [OPTION]... [NAME]...
 ```
 
-### Additional CLI utility
+## How to work with docker
 
-#### contrib/dockerenv
-
-The `docker` command has the `--env-file` option, but it only supports setting simple values.
+The `docker` command has the `--env-file` option, but it only supports setting simple values without newlines.
 
 - [docker cannot pass newlines from variables in --env-file files](https://github.com/moby/moby/issues/12997)
 
-This tool makes the files read by `--env-file` compatible with the `.env` format, and supports variable expansion and newlines.
-
-Example: (Use `dockerenv` instead of `docker`)
+shdotenv provides a simple solution to this problem.
 
 ```sh
-dockerenv run --env-file .env -it debian
+shdotenv docker run $(shdotenv -n | sed s/^/-e/) debian sh -c export
 ```
 
 ## .env file syntax
@@ -201,20 +208,21 @@ export EXPORT1="value"
 export EXPORT2 # Equivalent to: export EXPORT2="${EXPORT2:-}"
 ```
 
-- The syntax is a subset of the POSIX shell.
+- The syntax is a subset of the POSIX shell
 - The first line is an optional directive that specifies the dialect of the .env syntax
 - No spaces are allowed before or after the `=` separating the name and value
 - ANSI-C style escapes are not available (i.e., `\n` is not a newline)
 - **Unquoted value**
   - The special characters that can be used are `#` `%` `+` `,` `-` `.` `/` `:` `=` `@` `^` `_`
+  - Unquoted '=' not allowed for first character (Add in 0.14.0)
 - **Single-quoted value**
   - The disallowed character is: `'`
-  - It can contain newline characters.
+  - It can contain newline characters
 - **Double-quoted value**
   - Variable expansion is available (only `${VAR}` style is supported)
   - The following values should be escaped with a backslash (`\`): `$` <code>\`</code> `"` `\`
   - The `\` at the end of a line value means line continuation
-  - It can contain newline characters.
+  - It can contain newline characters
 - An optional `export` prefix can be added to the name
 - Comments at the end of a line need to be preceded by spaces before the `#`
 

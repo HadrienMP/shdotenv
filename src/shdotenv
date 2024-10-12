@@ -5,7 +5,7 @@ set -eu
 # Explicitly reset the IFS for the old dash (ash)
 IFS=$(printf '\n\t') && IFS=" ${IFS#?}${IFS%?}"
 
-version() { echo 0.13.0; }
+version() { echo 0.14.0; }
 
 usage() {
   printf '%s\n' "Usage: shdotenv [OPTION]... [--] [[COMMAND | export] [ARG]...]" \
@@ -19,26 +19,29 @@ usage() {
     "                                posix, ruby, node, python," \
     "                                php, go, rust, docker" \
     "  -f, --format FORMAT       Output in the specified format [default: sh]" \
-    "                                sh, csh, fish, json, jsonl, yaml, name" \
+    "                                sh, csh, fish, json, jsonl, yaml" \
     "  -e, --env ENV_PATH        Location of the .env file [default: .env]" \
     "                              Multiple -e options are allowed" \
     "                              If the ENV_PATH is \"-\", read from stdin" \
     "  -i, --ignore-environment  Ignore the current environment variables" \
     "      --overload            Overload predefined variables" \
+    "  -n, --name-only           Output only name" \
     "      --no-allexport        Disable all variable export" \
-    "                              Same as deprecated --noexport" \
     "      --no-nounset          Allow references to undefined variables" \
     "      --grep PATTERN        Output only names that match the regexp pattern" \
     "  -s, --sort                Sort variable names" \
     "  -q, --quiet               Suppress all output (useful for test .env files)" \
-    "  -v, --version             Show the version and exit" \
-    "  -h, --help                Show this message and exit" \
+    "      --version             Show the version and exit" \
+    "      --help                Show this message and exit" \
     "" \
-    "Usage: shdotenv export [-n | -p] [--] [NAME]..." \
-    "  Exports environment variables in posix-compliant .env format." \
+    "Usage: shdotenv [OPTION]... export [-0ps] [-n | -v] [--] [NAME]..." \
+    "  Exports environment variables. Default output is POSIX-compliant .env format." \
     "" \
-    "  -n  List only environment variable names" \
+    "  -0  end each output line with NUL, not newline" \
     "  -p  Append \"export\" prefix to environment variable names" \
+    "  -s  Empty string instead of error if name is missing" \
+    "  -n  List environment variable names only" \
+    "  -v  List environment variable values only" \
     "" \
     "  This will be output after the .env files is loaded. If you do not want" \
     "  to load it, specify \"-e /dev/null\". This is similar to \"export\", \"env\"" \
@@ -63,13 +66,14 @@ parse_options() {
         ;;
       -i | --ignore-environment) _shdotenv_ignore=1 ;;
       --overload) _shdotenv_overload=1 ;;
-      --no-allexport | --noexport) _shdotenv_allexport='' ;;
+      -n | --name-only) _shdotenv_nameonly=1 ;;
+      --no-allexport) _shdotenv_allexport='' ;;
       --no-nounset) _shdotenv_nounset='' ;;
       --grep) requires "$@" && shift && _shdotenv_grep="$1" ;;
       -s | --sort) _shdotenv_sort=1 ;;
       -q | --quiet) _shdotenv_quiet=1 ;;
-      -v | --version) version && exit 0 ;;
-      -h | --help) usage && exit 0 ;;
+      --version) version && exit 0 ;;
+      --help) usage && exit 0 ;;
       --) _shdotenv_pos=$((_shdotenv_pos + 1)) && break ;;
       -*) abort "unknown option: $1" ;;
       *) break ;;
@@ -104,7 +108,7 @@ init_vars() {
   set -- "$@" _shdotenv_libawk= _shdotenv_parser= _shdotenv_exporter=
   set -- "$@" _shdotenv_dialect= _shdotenv_format="${SHDOTENV_FORMAT:-}"
   set -- "$@" _shdotenv_envfiles= _shdotenv_overload= _shdotenv_grep=
-  set -- "$@" _shdotenv_allexport=1 _shdotenv_nounset=1
+  set -- "$@" _shdotenv_nameonly= _shdotenv_allexport=1 _shdotenv_nounset=1
   set -- "$@" _shdotenv_quiet= _shdotenv_ignore= _shdotenv_sort=
   unexport "$@"
 
@@ -132,6 +136,7 @@ exec_parser() {
   set -- -v DIALECT="$_shdotenv_dialect" "$@"
   set -- -v FORMAT="$_shdotenv_format" "$@"
   set -- -v OVERLOAD="$_shdotenv_overload" "$@"
+  set -- -v NAMEONLY="$_shdotenv_nameonly" "$@"
   set -- -v ALLEXPORT="$_shdotenv_allexport" "$@"
   set -- -v NOUNSET="$_shdotenv_nounset" "$@"
   set -- -v GREP="$_shdotenv_grep" "$@"

@@ -82,6 +82,10 @@ function parse_unquoted_value(str) {
     if (match(str, "[][{}()<>\"'`!$&~|;\\\\*?]")) {
       syntax_error("using without quotes is not allowed: !$&()*;<>?[\\]`{|}~")
     }
+
+    if (match(str, /^=.*/)) {
+      syntax_error("unquoted '=' not allowed for first character")
+    }
   } else {
     str = trim(str)
   }
@@ -159,7 +163,6 @@ function output(flag, key, value) {
   if (FORMAT == "json") output_json(flag, key, value)
   if (FORMAT == "jsonl") output_jsonl(flag, key, value)
   if (FORMAT == "yaml") output_yaml(flag, key, value)
-  if (FORMAT == "name") output_name_only(flag, key, value)
 }
 
 function output_sh(flag, key, value) {
@@ -231,12 +234,6 @@ function json_escape(value) {
   return value
 }
 
-function output_name_only(flag, key, value) {
-  if (flag == ONLY_EXPORT || flag == DO_EXPORT || flag == NO_EXPORT) {
-    print key
-  }
-}
-
 function process_begin() {
   output(BEFORE_ALL)
 }
@@ -300,7 +297,9 @@ function parse(lines) {
       key = parse_key(substr(line, 1, equal_pos - 1))
     }
 
-    if (equal_pos == 0) {
+    if (NAMEONLY) {
+      print key
+    } else if (equal_pos == 0) {
       output(ONLY_EXPORT, key)
     } else {
       export = (ALLEXPORT ? DO_EXPORT : NO_EXPORT)
@@ -357,7 +356,7 @@ BEGIN {
   }
 
   if (FORMAT == "") FORMAT = "sh"
-  if (!match(FORMAT, "^(sh|csh|fish|json|jsonl|yaml|name)$")) {
+  if (!match(FORMAT, "^(sh|csh|fish|json|jsonl|yaml)$")) {
     abort("unsupported format: " FORMAT)
   }
 
